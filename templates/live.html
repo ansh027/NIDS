@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Live Monitor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Live Network Monitor</h1>
+    <p class="page-subtitle">Real-time traffic capture and intrusion detection</p>
+</div>
+
+{% if not model_trained %}
+<div class="alert alert-warning">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+    <div>
+        <strong>Model Not Trained</strong>
+        <p>Train the model before starting live capture.</p>
+        <form method="POST" action="{{ url_for('train_model') }}" style="margin-top:0.5rem;">
+            <button type="submit" class="btn btn-primary btn-sm">Train Model Now</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Live Controls -->
+<div class="live-controls glass-card">
+    <div class="live-status" id="liveStatus">
+        <span class="live-dot" id="liveDot"></span>
+        <span id="liveStatusText">Stopped</span>
+    </div>
+    <div class="live-buttons">
+        <button class="btn btn-primary" id="startBtn" {% if not model_trained %}disabled{% endif %}
+            onclick="startCapture()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Start Capture
+        </button>
+        <button class="btn btn-danger" id="stopBtn" disabled onclick="stopCapture()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                <rect x="6" y="6" width="12" height="12" />
+            </svg>
+            Stop
+        </button>
+    </div>
+</div>
+
+<!-- Live Stats -->
+<div class="card-grid" id="liveStats">
+    <div class="glass-card card-accent-blue">
+        <div class="card-content">
+            <span class="card-label">Packets Captured</span>
+            <span class="card-value" id="statPackets">0</span>
+        </div>
+    </div>
+    <div class="glass-card card-accent-red">
+        <div class="card-content">
+            <span class="card-label">Alerts Raised</span>
+            <span class="card-value" id="statAlerts">0</span>
+        </div>
+    </div>
+    <div class="glass-card card-accent-cyan">
+        <div class="card-content">
+            <span class="card-label">Elapsed Time</span>
+            <span class="card-value" id="statElapsed">0s</span>
+        </div>
+    </div>
+    <div class="glass-card card-accent-purple">
+        <div class="card-content">
+            <span class="card-label">Interface</span>
+            <span class="card-value" id="statInterface">—</span>
+        </div>
+    </div>
+</div>
+
+<!-- Live Results Feed -->
+<div class="section-header">
+    <h2>Live Feed</h2>
+    <span class="badge badge-info" id="feedCount">0 events</span>
+</div>
+
+<div class="live-feed glass-card" id="liveFeed">
+    <div class="empty-state" id="emptyFeed">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+            style="width:48px;height:48px;opacity:0.3;">
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="10 8 16 12 10 16 10 8" />
+        </svg>
+        <p>Start capture to see live network events</p>
+    </div>
+    <div id="feedEntries" style="display:none;"></div>
+</div>
+
+<!-- Note about Npcap -->
+<div class="alert alert-info" style="margin-top:2rem;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+    <div>
+        <strong>Requirement</strong>
+        <p>Live capture requires <strong>Npcap</strong> (Windows) or <strong>libpcap</strong> (Linux/Mac) to be
+            installed, and the application must be run with administrator privileges.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let pollInterval = null;
+
+    // Request browser notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+
+    function startCapture() {
+        fetch('/api/live/start', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('liveDot').classList.add('live-dot-active');
+                document.getElementById('liveStatusText').textContent = 'Capturing...';
+                document.getElementById('emptyFeed').style.display = 'none';
+                document.getElementById('feedEntries').style.display = 'block';
+                pollInterval = setInterval(pollResults, 2000);
+            })
+            .catch(err => alert('Failed to start: ' + err));
+    }
+
+    function stopCapture() {
+        fetch('/api/live/stop', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('liveDot').classList.remove('live-dot-active');
+                document.getElementById('liveStatusText').textContent = 'Stopped';
+                if (pollInterval) clearInterval(pollInterval);
+            });
+    }
+
+    function pollResults() {
+        fetch('/api/live/results')
+            .then(r => r.json())
+            .then(data => {
+                if (data.stats) {
+                    document.getElementById('statPackets').textContent = data.stats.total_packets;
+                    document.getElementById('statAlerts').textContent = data.stats.total_alerts;
+                    document.getElementById('statElapsed').textContent = data.stats.elapsed_seconds + 's';
+                    document.getElementById('statInterface').textContent = data.stats.interface;
+                }
+
+                if (!data.running && pollInterval) {
+                    clearInterval(pollInterval);
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    document.getElementById('liveDot').classList.remove('live-dot-active');
+                    document.getElementById('liveStatusText').textContent = 'Stopped';
+                }
+
+                const feed = document.getElementById('feedEntries');
+                const results = data.results || [];
+                document.getElementById('feedCount').textContent = results.length + ' events';
+
+                feed.innerHTML = '';
+                results.reverse().forEach(batch => {
+                    if (batch.error) {
+                        feed.innerHTML += `<div class="feed-entry feed-error">
+                            <span class="feed-time">${batch.timestamp}</span>
+                            <span class="feed-msg">⚠ Error: ${batch.error}</span>
+                        </div>`;
+                        return;
+                    }
+
+                    const s = batch.summary || {};
+                    const icon = s.intrusion > 0 ? '🔴' : '🟢';
+
+                    // Build attack breakdown string for summary
+                    let attackInfo = '';
+                    const breakdown = s.attack_breakdown || {};
+                    const attackTypes = Object.keys(breakdown).filter(k => k !== 'Normal');
+                    if (attackTypes.length > 0) {
+                        attackInfo = ' → ' + attackTypes.map(t => `${t}: ${breakdown[t]}`).join(', ');
+                    }
+
+                    feed.innerHTML += `<div class="feed-entry ${s.intrusion > 0 ? 'feed-alert' : 'feed-ok'}">
+                        <span class="feed-time">${batch.timestamp}</span>
+                        <span class="feed-msg">${icon} Packets: ${batch.packet_count} | Flows: ${batch.flow_count} | Intrusions: ${s.intrusion || 0}${attackInfo}</span>
+                    </div>`;
+
+                    // Show individual intrusion alerts with attack type badge
+                    const badgeColors = {
+                        'Port Scan': 'background:rgba(245,158,11,0.2);color:#f59e0b;',
+                        'DoS Flood': 'background:rgba(239,68,68,0.2);color:#ef4444;',
+                        'Brute Force': 'background:rgba(139,92,246,0.2);color:#8b5cf6;',
+                        'Data Exfiltration': 'background:rgba(6,182,212,0.2);color:#06b6d4;',
+                    };
+                    (batch.results || []).filter(r => r.prediction === 1).forEach(r => {
+                        const atype = r.attack_type || r.label;
+                        const badgeStyle = badgeColors[atype] || 'background:rgba(239,68,68,0.2);color:#ef4444;';
+                        feed.innerHTML += `<div class="feed-entry feed-detail">
+                            <span class="feed-msg">&nbsp;&nbsp;⚠ Flow #${r.index}:
+                                <span style="${badgeStyle}padding:2px 8px;border-radius:6px;font-weight:600;font-size:0.85em;">${atype}</span>
+                                — confidence: ${(r.confidence * 100).toFixed(1)}%, severity: ${r.severity}
+                            </span>
+                        </div>`;
+                    });
+                });
+
+                // Browser notification for new intrusions
+                const latestBatch = results[results.length - 1];
+                if (latestBatch && !latestBatch.error) {
+                    const ls = latestBatch.summary || {};
+                    if (ls.intrusion > 0 && 'Notification' in window && Notification.permission === 'granted') {
+                        const bd = ls.attack_breakdown || {};
+                        const types = Object.keys(bd).filter(k => k !== 'Normal').join(', ');
+                        new Notification('🚨 NIDS Alert', {
+                            body: `${ls.intrusion} intrusion(s) detected: ${types}`,
+                            icon: '/static/css/style.css',
+                            tag: 'nids-alert',
+                        });
+                    }
+                }
+            });
+    }
+
+    // Check initial state
+    fetch('/api/live/results').then(r => r.json()).then(data => {
+        if (data.running) {
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('liveDot').classList.add('live-dot-active');
+            document.getElementById('liveStatusText').textContent = 'Capturing...';
+            document.getElementById('emptyFeed').style.display = 'none';
+            document.getElementById('feedEntries').style.display = 'block';
+            pollInterval = setInterval(pollResults, 2000);
+        }
+    });
+</script>
+{% endblock %}

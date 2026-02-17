@@ -1,0 +1,18 @@
+{
+  "email": {
+    "enabled": true,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "username": "sansh0214@gmail.com",
+    "password": "swzv sxkj bijf wfmg",
+    "from_addr": "",
+    "recipients": [
+      "ansh9807891061@gmail.com"
+    ],
+    "use_tls": true
+  },
+  "preferences": {
+    "min_severity": "suspicious",
+    "cooldown_seconds": 60
+  }
+}

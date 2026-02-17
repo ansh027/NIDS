@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+env/
+.env
+
+# Data files (too large for GitHub)
+data/MachineLearningCVE/
+data/network_data.csv
+data/history/
+data/alerts.json
+
+# Model files (too large for GitHub)
+models/*.pkl
+models/*.h5
+models/*.joblib
+
+# Upload files
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

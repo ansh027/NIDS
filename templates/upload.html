@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Upload PCAP{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Analyze PCAP File</h1>
+    <p class="page-subtitle">Upload a packet capture file for intrusion analysis</p>
+</div>
+
+{% if not model_trained %}
+<div class="alert alert-warning">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+    <div>
+        <strong>Model Not Trained</strong>
+        <p>Please train the model before uploading a PCAP file.</p>
+        <form method="POST" action="{{ url_for('train_model') }}" style="margin-top: 0.5rem;">
+            <button type="submit" class="btn btn-primary btn-sm">Train Model Now</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="upload-container">
+    <form method="POST" action="{{ url_for('analyze') }}" enctype="multipart/form-data" id="uploadForm">
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+            </div>
+            <h3>Drag & drop your PCAP file here</h3>
+            <p>or click to browse</p>
+            <p class="upload-hint">Supported formats: .pcap, .pcapng, .cap (max 100 MB)</p>
+            <input type="file" name="pcap_file" id="pcapFile" accept=".pcap,.pcapng,.cap" required hidden>
+        </div>
+
+        <div class="selected-file" id="selectedFile" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+            </svg>
+            <span id="fileName"></span>
+            <button type="button" class="btn-remove" id="removeFile">&times;</button>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="analyzeBtn" {% if not model_trained %}disabled{% endif %}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+            Analyze File
+        </button>
+    </form>
+</div>
+
+<!-- Recent History -->
+{% if recent_history %}
+<div style="margin-top:2rem;">
+    <div class="section-header" style="display:flex; align-items:center; justify-content:space-between;">
+        <h2>Recent Analyses</h2>
+        <a href="{{ url_for('history_page') }}" class="btn btn-sm btn-secondary">View All History</a>
+    </div>
+    <div class="table-container glass-card">
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Filename</th>
+                        <th>Flows</th>
+                        <th>Intrusions</th>
+                        <th>Threat</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in recent_history %}
+                    <tr class="history-row {% if a.summary.intrusion|default(0) > 0 %}row-alert{% endif %}">
+                        <td class="history-time">
+                            <span class="time-date">{{ a.timestamp[:10] }}</span>
+                            <span class="time-clock">{{ a.timestamp[11:16] }}</span>
+                        </td>
+                        <td><span class="history-filename">{{ a.filename }}</span></td>
+                        <td>{{ a.flow_count }}</td>
+                        <td><span
+                                class="badge badge-{{ 'danger' if a.summary.intrusion|default(0) > 0 else 'success' }}">{{
+                                a.summary.intrusion|default(0) }}</span></td>
+                        <td>
+                            {% set rate = a.summary.intrusion_rate|default(0) %}
+                            {% if rate > 50 %}
+                            <span class="severity severity-malicious">High</span>
+                            {% elif rate > 20 %}
+                            <span class="severity severity-suspicious">Medium</span>
+                            {% else %}
+                            <span class="severity severity-safe">Low</span>
+                            {% endif %}
+                        </td>
+                        <td class="history-actions">
+                            <a href="{{ url_for('history_detail', entry_id=a.id) }}"
+                                class="btn btn-sm btn-primary">View</a>
+                            <a href="{{ url_for('history_download_pdf', entry_id=a.id) }}"
+                                class="btn btn-sm btn-secondary">PDF</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('pcapFile');
+    const selectedFile = document.getElementById('selectedFile');
+    const fileName = document.getElementById('fileName');
+    const removeBtn = document.getElementById('removeFile');
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('drag-over');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('drag-over');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            showFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {
+            showFile(fileInput.files[0]);
+        }
+    });
+
+    removeBtn.addEventListener('click', () => {
+        fileInput.value = '';
+        selectedFile.style.display = 'none';
+        uploadZone.style.display = 'flex';
+    });
+
+    function showFile(file) {
+        fileName.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+        selectedFile.style.display = 'flex';
+        uploadZone.style.display = 'none';
+    }
+
+    // Loading state on submit
+    document.getElementById('uploadForm').addEventListener('submit', function () {
+        const btn = document.getElementById('analyzeBtn');
+        btn.innerHTML = '<span class="spinner"></span> Analyzing...';
+        btn.disabled = true;
+    });
+</script>
+{% endblock %}

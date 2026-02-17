@@ -1,0 +1,478 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Alert Settings</h1>
+    <p class="page-subtitle">Configure Email and notification preferences</p>
+</div>
+
+<div id="settingsApp">
+    <!-- Alert Preferences -->
+    <div class="section-header">
+        <h2>Preferences</h2>
+    </div>
+    <div class="glass-card" style="padding:1.5rem;margin-bottom:1.5rem;">
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Minimum Severity to Alert</label>
+                <select id="minSeverity" class="form-input">
+                    <option value="suspicious">Suspicious & Malicious</option>
+                    <option value="malicious">Malicious Only</option>
+                </select>
+                <span class="form-hint">Only alert when threats meet this severity threshold</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Cooldown (seconds)</label>
+                <input type="number" id="cooldown" class="form-input" value="60" min="10" max="3600">
+                <span class="form-hint">Minimum time between duplicate alerts</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Configuration -->
+    <div class="section-header">
+        <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                style="width:20px;height:20px;vertical-align:middle;margin-right:6px;">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+            </svg>
+            Email Alerts
+        </h2>
+        <label class="toggle-switch">
+            <input type="checkbox" id="emailEnabled">
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+    <div class="glass-card" style="padding:1.5rem;margin-bottom:1.5rem;" id="emailSection">
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">SMTP Server</label>
+                <input type="text" id="smtpServer" class="form-input" placeholder="smtp.gmail.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SMTP Port</label>
+                <input type="number" id="smtpPort" class="form-input" value="587">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Username / Email</label>
+                <input type="text" id="smtpUser" class="form-input" placeholder="your@email.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password / App Password</label>
+                <input type="password" id="smtpPass" class="form-input" placeholder="••••••••">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label class="form-label">From Address</label>
+                <input type="email" id="fromAddr" class="form-input" placeholder="nids-alerts@yourdomain.com">
+                <span class="form-hint">Leave empty to use the username as the sender</span>
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label class="form-label">Recipients (comma-separated)</label>
+                <input type="text" id="recipients" class="form-input" placeholder="admin@example.com, soc@example.com">
+            </div>
+            <div class="form-group">
+                <label class="toggle-inline">
+                    <input type="checkbox" id="useTls" checked>
+                    <span>Use TLS</span>
+                </label>
+            </div>
+        </div>
+        <button class="btn btn-secondary" onclick="testEmail()" style="margin-top:1rem;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+            Test Email
+        </button>
+        <span id="emailTestResult" class="test-result"></span>
+    </div>
+
+    <!-- Save Button -->
+    <div style="display:flex;gap:1rem;margin-bottom:2rem;">
+        <button class="btn btn-primary" onclick="saveSettings()" id="saveBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+            </svg>
+            Save Settings
+        </button>
+        <span id="saveResult" class="test-result"></span>
+    </div>
+
+    <!-- Alert Log -->
+    <div class="section-header">
+        <h2>Alert Log</h2>
+        <button class="btn btn-secondary btn-sm" onclick="clearLog()">Clear Log</button>
+    </div>
+    <div class="glass-card" style="padding:1.5rem;">
+        <div id="alertLog" class="alert-log">
+            <p class="text-dim" style="text-align:center;">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    @media (max-width: 600px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+
+    .form-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-input {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 0.6rem 0.8rem;
+        color: #fff;
+        font-size: 0.95rem;
+        font-family: inherit;
+        transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--accent-blue, #3b82f6);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    .form-input::placeholder {
+        color: rgba(255, 255, 255, 0.25);
+    }
+
+    select.form-input {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.8rem center;
+        padding-right: 2rem;
+    }
+
+    .form-hint {
+        font-size: 0.78rem;
+        color: rgba(255, 255, 255, 0.35);
+    }
+
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 48px;
+        height: 26px;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 26px;
+        transition: 0.3s;
+    }
+
+    .toggle-slider::before {
+        content: "";
+        position: absolute;
+        height: 20px;
+        width: 20px;
+        left: 3px;
+        bottom: 3px;
+        background: #fff;
+        border-radius: 50%;
+        transition: 0.3s;
+    }
+
+    .toggle-switch input:checked+.toggle-slider {
+        background: var(--accent-blue, #3b82f6);
+    }
+
+    .toggle-switch input:checked+.toggle-slider::before {
+        transform: translateX(22px);
+    }
+
+    .toggle-inline {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .toggle-inline input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent-blue, #3b82f6);
+    }
+
+    .test-result {
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.5rem;
+    }
+
+    .test-result.success {
+        color: #22c55e;
+    }
+
+    .test-result.error {
+        color: #ef4444;
+    }
+
+    .alert-log {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .log-entry {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .log-entry:last-child {
+        border-bottom: none;
+    }
+
+    .log-time {
+        font-size: 0.78rem;
+        color: rgba(255, 255, 255, 0.4);
+        white-space: nowrap;
+        min-width: 140px;
+    }
+
+    .log-details {
+        flex: 1;
+    }
+
+    .log-attacks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-top: 0.3rem;
+    }
+
+    .log-badge {
+        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+    }
+
+    .log-channels {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.35);
+        margin-top: 0.3rem;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentSettings = {};
+
+    // Load settings on page load
+    async function loadSettings() {
+        try {
+            const res = await fetch('/api/settings');
+            currentSettings = await res.json();
+            populateForm(currentSettings);
+        } catch (e) {
+            console.error('Failed to load settings:', e);
+        }
+        loadAlertLog();
+    }
+
+    function populateForm(s) {
+        // Email
+        const email = s.email || {};
+        document.getElementById('emailEnabled').checked = email.enabled || false;
+        document.getElementById('smtpServer').value = email.smtp_server || '';
+        document.getElementById('smtpPort').value = email.smtp_port || 587;
+        document.getElementById('smtpUser').value = email.username || '';
+        document.getElementById('smtpPass').value = email.password || '';
+        document.getElementById('fromAddr').value = email.from_addr || '';
+        document.getElementById('recipients').value = (email.recipients || []).join(', ');
+        document.getElementById('useTls').checked = email.use_tls !== false;
+
+
+        // Preferences
+        const prefs = s.preferences || {};
+        document.getElementById('minSeverity').value = prefs.min_severity || 'suspicious';
+        document.getElementById('cooldown').value = prefs.cooldown_seconds || 60;
+    }
+
+    function gatherForm() {
+        const recipients = document.getElementById('recipients').value
+            .split(',')
+            .map(e => e.trim())
+            .filter(e => e.length > 0);
+
+        return {
+            email: {
+                enabled: document.getElementById('emailEnabled').checked,
+                smtp_server: document.getElementById('smtpServer').value,
+                smtp_port: parseInt(document.getElementById('smtpPort').value) || 587,
+                username: document.getElementById('smtpUser').value,
+                password: document.getElementById('smtpPass').value,
+                from_addr: document.getElementById('fromAddr').value,
+                recipients: recipients,
+                use_tls: document.getElementById('useTls').checked,
+            },
+            preferences: {
+                min_severity: document.getElementById('minSeverity').value,
+                cooldown_seconds: parseInt(document.getElementById('cooldown').value) || 60,
+            },
+        };
+    }
+
+    async function saveSettings() {
+        const btn = document.getElementById('saveBtn');
+        const result = document.getElementById('saveResult');
+        btn.disabled = true;
+        result.textContent = 'Saving...';
+        result.className = 'test-result';
+
+        try {
+            const settings = gatherForm();
+            const res = await fetch('/api/settings/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings),
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                result.textContent = '✓ Saved!';
+                result.className = 'test-result success';
+            } else {
+                result.textContent = '✗ ' + (data.error || 'Failed');
+                result.className = 'test-result error';
+            }
+        } catch (e) {
+            result.textContent = '✗ ' + e;
+            result.className = 'test-result error';
+        }
+        btn.disabled = false;
+        setTimeout(() => { result.textContent = ''; }, 3000);
+    }
+
+    async function testEmail() {
+        const result = document.getElementById('emailTestResult');
+        result.textContent = 'Sending test...';
+        result.className = 'test-result';
+
+        // Save first, then test
+        const settings = gatherForm();
+        await fetch('/api/settings/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings),
+        });
+
+        try {
+            const res = await fetch('/api/alerts/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel: 'email' }),
+            });
+            const data = await res.json();
+            if (data.result === 'ok') {
+                result.textContent = '✓ Test email sent!';
+                result.className = 'test-result success';
+            } else {
+                result.textContent = '✗ ' + data.result;
+                result.className = 'test-result error';
+            }
+        } catch (e) {
+            result.textContent = '✗ ' + e;
+            result.className = 'test-result error';
+        }
+        setTimeout(() => { result.textContent = ''; }, 5000);
+    }
+
+
+
+    async function loadAlertLog() {
+        try {
+            const res = await fetch('/api/alerts/log');
+            const data = await res.json();
+            const container = document.getElementById('alertLog');
+
+            if (!data.log || data.log.length === 0) {
+                container.innerHTML = '<p class="text-dim" style="text-align:center;">No alerts sent yet</p>';
+                return;
+            }
+
+            const badgeColors = {
+                'Port Scan': 'background:rgba(245,158,11,0.2);color:#f59e0b;',
+                'DoS Flood': 'background:rgba(239,68,68,0.2);color:#ef4444;',
+                'Brute Force': 'background:rgba(139,92,246,0.2);color:#8b5cf6;',
+                'Data Exfiltration': 'background:rgba(6,182,212,0.2);color:#06b6d4;',
+                'Test Alert': 'background:rgba(34,197,94,0.2);color:#22c55e;',
+            };
+
+            container.innerHTML = data.log.reverse().map(entry => {
+                const attacks = (entry.attack_types || []).map(a => {
+                    const style = badgeColors[a] || 'background:rgba(239,68,68,0.2);color:#ef4444;';
+                    return `<span class="log-badge" style="${style}">${a}</span>`;
+                }).join('');
+
+                const channels = (entry.channels_sent || []).join(', ') || 'none';
+                const sev = entry.max_severity === 'malicious' ? '🔴' : '🟡';
+                const conf = entry.max_confidence ? (entry.max_confidence * 100).toFixed(1) + '%' : '—';
+
+                return `<div class="log-entry">
+                    <span class="log-time">${entry.timestamp || '—'}</span>
+                    <div class="log-details">
+                        <div>${sev} ${entry.threat_count || 0} threat(s) — confidence: ${conf}</div>
+                        <div class="log-attacks">${attacks}</div>
+                        <div class="log-channels">Sent via: ${channels}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            console.error('Failed to load alert log:', e);
+        }
+    }
+
+    async function clearLog() {
+        if (!confirm('Clear all alert history?')) return;
+        await fetch('/api/alerts/log', { method: 'DELETE' });
+        loadAlertLog();
+    }
+
+    // Init
+    loadSettings();
+</script>
+{% endblock %}

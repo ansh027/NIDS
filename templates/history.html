@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Analysis History{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Analysis History</h1>
+    <p class="page-subtitle">Review past PCAP analysis results</p>
+</div>
+
+{% if analyses %}
+<div class="history-stats card-grid">
+    <div class="glass-card card-accent-blue">
+        <div class="card-content">
+            <span class="card-label">Total Analyses</span>
+            <span class="card-value">{{ analyses|length }}</span>
+        </div>
+    </div>
+    <div class="glass-card card-accent-red">
+        <div class="card-content">
+            <span class="card-label">Threats Found</span>
+            <span class="card-value text-red">{{ analyses|sum(attribute='summary.intrusion') }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="table-container glass-card">
+    <div class="table-scroll">
+        <table class="data-table" id="historyTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Date & Time</th>
+                    <th>Filename</th>
+                    <th>Packets</th>
+                    <th>Flows</th>
+                    <th>Normal</th>
+                    <th>Intrusions</th>
+                    <th>Threat Level</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in analyses %}
+                <tr class="history-row {% if a.summary.intrusion|default(0) > 0 %}row-alert{% endif %}">
+                    <td>{{ loop.index }}</td>
+                    <td class="history-time">
+                        <span class="time-date">{{ a.timestamp[:10] }}</span>
+                        <span class="time-clock">{{ a.timestamp[11:19] }}</span>
+                    </td>
+                    <td>
+                        <span class="history-filename">{{ a.filename }}</span>
+                    </td>
+                    <td>{{ a.packet_count }}</td>
+                    <td>{{ a.flow_count }}</td>
+                    <td><span class="badge badge-success">{{ a.summary.normal|default(0) }}</span></td>
+                    <td><span class="badge badge-danger">{{ a.summary.intrusion|default(0) }}</span></td>
+                    <td>
+                        {% set rate = a.summary.intrusion_rate|default(0) %}
+                        {% if rate > 50 %}
+                        <span class="severity severity-malicious">High {{ rate }}%</span>
+                        {% elif rate > 20 %}
+                        <span class="severity severity-suspicious">Medium {{ rate }}%</span>
+                        {% else %}
+                        <span class="severity severity-safe">Low {{ rate }}%</span>
+                        {% endif %}
+                    </td>
+                    <td class="history-actions">
+                        <a href="{{ url_for('history_detail', entry_id=a.id) }}" class="btn btn-sm btn-primary"
+                            title="View Details">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                style="width:14px;height:14px;">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            View
+                        </a>
+                        <a href="{{ url_for('history_download_pdf', entry_id=a.id) }}" class="btn btn-sm btn-secondary"
+                            title="Download PDF">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                style="width:14px;height:14px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            PDF
+                        </a>
+                        <form method="POST" action="{{ url_for('history_delete', entry_id=a.id) }}"
+                            style="display:inline;" onsubmit="return confirm('Delete this analysis?');">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    style="width:14px;height:14px;">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="empty-state glass-card">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+        style="width:64px;height:64px;opacity:0.4;">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+    </svg>
+    <h3>No Analysis History</h3>
+    <p>Upload and analyze a PCAP file to see results here.</p>
+    <a href="{{ url_for('upload') }}" class="btn btn-primary" style="margin-top:1rem;">Analyze a PCAP File</a>
+</div>
+{% endif %}
+{% endblock %}
